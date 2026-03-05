@@ -4,7 +4,7 @@
  */
 
 const userRoutes = require("./userRoutes");
-const articleRoutes = require("./articleRoutes");
+const competitionRoutes = require("./competitionRoutes");
 const exampleRoutes = require("./exampleRoutes");
 
 module.exports = (app) => {
@@ -19,6 +19,6 @@ module.exports = (app) => {
    * se deberían agrupar bajo la URL `/articles` (en inglés y en plural).
    */
   app.use("/users", userRoutes);
-  app.use("/articles", articleRoutes);
+  app.use("/competitions", competitionRoutes);
   app.use("/examples", exampleRoutes);
 };

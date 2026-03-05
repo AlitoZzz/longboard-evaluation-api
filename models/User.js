@@ -9,16 +9,35 @@ class User extends Model {
           primaryKey: true,
           autoIncrement: true,
         },
-        firstname: {
-          type: DataTypes.STRING,
+        name: {
+          type: DataTypes.STRING(100),
+          allowNull: false,
         },
-        lastname: {
-          type: DataTypes.STRING,
+        email: {
+          type: DataTypes.STRING(255),
+          allowNull: false,
+          unique: true,
+          validate: {
+            isEmail: true,
+          },
+          set(value) {
+            this.setDataValue("email", value.toLowerCase());
+          },
+        },
+        password: {
+          type: DataTypes.STRING, // hash
+          allowNull: false,
+        },
+        role: {
+          type: DataTypes.ENUM("admin", "judge"),
+          allowNull: false,
+          defaultValue: "judge",
         },
       },
       {
         sequelize,
-        modelName: "user", // Nombre del modelo en singular y en minúscula.
+        modelName: "User",
+        tableName: "users",
       },
     );
     return User;

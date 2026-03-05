@@ -13,22 +13,101 @@ const sequelize = new Sequelize(
 
 // Requerir todos los modelos:
 const User = require("./User");
-const Article = require("./Article");
+const Competition = require("./Competition");
+const Category = require("./Category");
+const Competitor = require("./Competitor");
+const Run = require("./Run");
+const Criterion = require("./Criterion");
+const Score = require("./Score");
+const ScoreDetail = require("./ScoreDetail");
 
 // Inicializar todos los modelos:
 User.initModel(sequelize);
-Article.initModel(sequelize);
+Competition.initModel(sequelize);
+Category.initModel(sequelize);
+Competitor.initModel(sequelize);
+Run.initModel(sequelize);
+Criterion.initModel(sequelize);
+Score.initModel(sequelize);
+ScoreDetail.initModel(sequelize);
 
 /*
  * Luego de definir los modelos, se pueden establecer relaciones entre los
  * mismos (usando métodos como belongsTo, hasMany y belongsToMany)...
- *
- * Por ejemplo, si un User está relacionado con un Article, establecerlo
- * aquí abajo.
  */
+Competition.hasMany(Category, {
+  foreignKey: "competition_id",
+  onDelete: "CASCADE",
+});
+
+Category.belongsTo(Competition, {
+  foreignKey: "competition_id",
+});
+Category.hasMany(Competitor, {
+  foreignKey: "category_id",
+  onDelete: "CASCADE",
+});
+
+Competitor.belongsTo(Category, {
+  foreignKey: "category_id",
+});
+Category.hasMany(Criterion, {
+  foreignKey: "category_id",
+  onDelete: "CASCADE",
+});
+
+Criterion.belongsTo(Category, {
+  foreignKey: "category_id",
+});
+Competitor.hasMany(Run, {
+  foreignKey: "competitor_id",
+  onDelete: "CASCADE",
+});
+
+Run.belongsTo(Competitor, {
+  foreignKey: "competitor_id",
+});
+Run.hasMany(Score, {
+  foreignKey: "run_id",
+  onDelete: "CASCADE",
+});
+
+Score.belongsTo(Run, {
+  foreignKey: "run_id",
+});
+User.hasMany(Score, {
+  foreignKey: "judge_id",
+  onDelete: "CASCADE",
+});
+
+Score.belongsTo(User, {
+  foreignKey: "judge_id",
+});
+Score.hasMany(ScoreDetail, {
+  foreignKey: "score_id",
+  onDelete: "CASCADE",
+});
+
+ScoreDetail.belongsTo(Score, {
+  foreignKey: "score_id",
+});
+Criterion.hasMany(ScoreDetail, {
+  foreignKey: "criterion_id",
+  onDelete: "CASCADE",
+});
+
+ScoreDetail.belongsTo(Criterion, {
+  foreignKey: "criterion_id",
+});
 
 module.exports = {
   sequelize,
   User,
-  Article,
+  Competition,
+  Category,
+  Competitor,
+  Run,
+  Criterion,
+  Score,
+  ScoreDetail,
 };

@@ -9,16 +9,23 @@ class Competition extends Model {
           primaryKey: true,
           autoIncrement: true,
         },
-        title: {
-          type: DataTypes.STRING,
+        name: {
+          type: DataTypes.STRING(150),
+          allowNull: false,
         },
-        content: {
-          type: DataTypes.TEXT,
+        date: {
+          type: DataTypes.DATEONLY,
+          allowNull: false,
+        },
+        location: {
+          type: DataTypes.STRING(150),
+          allowNull: false,
         },
       },
       {
         sequelize,
-        modelName: "Competition", // Nombre del modelo en singular y en minúscula.
+        modelName: "Competition",
+        tableName: "competitions",
       },
     );
 
