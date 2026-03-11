@@ -9,16 +9,14 @@ class Score extends Model {
           primaryKey: true,
           autoIncrement: true,
         },
+
         run_id: {
           type: DataTypes.BIGINT.UNSIGNED,
           allowNull: false,
         },
+
         judge_id: {
           type: DataTypes.BIGINT.UNSIGNED,
-          allowNull: false,
-        },
-        value: {
-          type: DataTypes.DECIMAL(5, 2),
           allowNull: false,
         },
       },

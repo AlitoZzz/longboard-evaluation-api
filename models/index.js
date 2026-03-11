@@ -1,13 +1,13 @@
 const { Sequelize } = require("sequelize");
 
 const sequelize = new Sequelize(
-  process.env.DB_DATABASE, // Ej: hack_academy_db
-  process.env.DB_USERNAME, // Ej: root
-  process.env.DB_PASSWORD, // Ej: root
+  process.env.DB_DATABASE,
+  process.env.DB_USERNAME,
+  process.env.DB_PASSWORD,
   {
-    host: process.env.DB_HOST, // Ej: 127.0.0.1
-    dialect: process.env.DB_CONNECTION, // Ej: mysql
-    logging: false, // Para que no aparezcan mensajes en consola.
+    host: process.env.DB_HOST,
+    dialect: process.env.DB_CONNECTION,
+    logging: false,
   },
 );
 
@@ -37,67 +37,82 @@ ScoreDetail.initModel(sequelize);
  */
 Competition.hasMany(Category, {
   foreignKey: "competition_id",
+  as: "categories",
   onDelete: "CASCADE",
 });
-
 Category.belongsTo(Competition, {
   foreignKey: "competition_id",
+  as: "competition",
 });
+
 Category.hasMany(Competitor, {
   foreignKey: "category_id",
+  as: "competitors",
   onDelete: "CASCADE",
 });
-
 Competitor.belongsTo(Category, {
   foreignKey: "category_id",
+  as: "category",
 });
+
 Category.hasMany(Criterion, {
   foreignKey: "category_id",
+  as: "criteria",
   onDelete: "CASCADE",
 });
-
 Criterion.belongsTo(Category, {
   foreignKey: "category_id",
+  as: "category",
 });
+
 Competitor.hasMany(Run, {
   foreignKey: "competitor_id",
+  as: "runs",
   onDelete: "CASCADE",
 });
-
 Run.belongsTo(Competitor, {
   foreignKey: "competitor_id",
+  as: "competitor",
 });
+
 Run.hasMany(Score, {
   foreignKey: "run_id",
+  as: "scores",
   onDelete: "CASCADE",
 });
-
 Score.belongsTo(Run, {
   foreignKey: "run_id",
+  as: "run",
 });
+
 User.hasMany(Score, {
   foreignKey: "judge_id",
+  as: "scores",
   onDelete: "CASCADE",
 });
-
 Score.belongsTo(User, {
   foreignKey: "judge_id",
+  as: "judge",
 });
+
 Score.hasMany(ScoreDetail, {
   foreignKey: "score_id",
+  as: "scoreDetails",
   onDelete: "CASCADE",
 });
-
 ScoreDetail.belongsTo(Score, {
   foreignKey: "score_id",
-});
-Criterion.hasMany(ScoreDetail, {
-  foreignKey: "criterion_id",
-  onDelete: "CASCADE",
+  as: "score",
 });
 
+Criterion.hasMany(ScoreDetail, {
+  foreignKey: "criterion_id",
+  as: "scoreDetails",
+  onDelete: "CASCADE",
+});
 ScoreDetail.belongsTo(Criterion, {
   foreignKey: "criterion_id",
+  as: "criterion",
 });
 
 module.exports = {

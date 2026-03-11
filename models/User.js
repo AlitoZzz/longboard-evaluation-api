@@ -38,6 +38,21 @@ class User extends Model {
         sequelize,
         modelName: "User",
         tableName: "users",
+
+        defaultScope: {
+          attributes: {
+            exclude: ["password", "email"],
+          },
+        },
+
+        scopes: {
+          withEmail: {
+            attributes: {},
+          },
+          withPassword: {
+            attributes: {},
+          },
+        },
       },
     );
     return User;

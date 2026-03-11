@@ -6,6 +6,12 @@
 const userRoutes = require("./userRoutes");
 const competitionRoutes = require("./competitionRoutes");
 const exampleRoutes = require("./exampleRoutes");
+const categoryRoutes = require("./categoryRouotes");
+const competitorRoutes = require("./competitorRoutes");
+const criterionRoutes = require("./criterionRoutes");
+const runRoutes = require("./runRoutes");
+const scoreRoutes = require("./scoreRoutes");
+const authRoutes = require("./authRoutes");
 
 module.exports = (app) => {
   /*
@@ -21,4 +27,10 @@ module.exports = (app) => {
   app.use("/users", userRoutes);
   app.use("/competitions", competitionRoutes);
   app.use("/examples", exampleRoutes);
+  app.use("/categories", categoryRoutes);
+  app.use("/competitors", competitorRoutes);
+  app.use("/criteria", criterionRoutes);
+  app.use("/runs", runRoutes);
+  app.use("/scores", scoreRoutes);
+  app.use("/auth", authRoutes);
 };

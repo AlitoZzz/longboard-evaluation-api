@@ -1,22 +1,112 @@
+const bcrypt = require("bcrypt");
 const { User } = require("../models");
 
-// Display a listing of the resource.
-async function index(req, res) {}
+const SALT_ROUNDS = 10;
 
-// Display the specified resource.
-async function show(req, res) {}
+// POST /users
+async function store(req, res) {
+  try {
+    const { name, email, password } = req.body;
 
-// Store a newly created resource in storage.
-async function store(req, res) {}
+    const hashedPassword = await bcrypt.hash(password, SALT_ROUNDS);
 
-// Update the specified resource in storage.
-async function update(req, res) {}
+    const user = await User.create({
+      name,
+      email,
+      password: hashedPassword,
+      role: "judge",
+    });
 
-// Remove the specified resource from storage.
-async function destroy(req, res) {}
+    res.status(201).json({
+      user: {
+        id: user.id,
+        name: user.name,
+      },
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+}
 
-// Otros handlers...
-// ...
+// GET /users
+async function index(req, res) {
+  try {
+    const users = await User.findAll();
+
+    res.json(users);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+}
+
+// GET /users/:id
+async function show(req, res) {
+  try {
+    const { id } = req.params;
+
+    const user = await User.findByPk(id);
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    res.json(user);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+}
+
+// PATCH /users/:id
+async function update(req, res) {
+  try {
+    const { id } = req.params;
+    const { name, email, password } = req.body;
+
+    const user = await User.findByPk(id);
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    if (password) {
+      user.password = await bcrypt.hash(password, SALT_ROUNDS);
+    }
+
+    if (name) user.name = name;
+    if (email) user.email = email;
+
+    await user.save();
+
+    res.json({
+      message: "User updated successfully",
+      user: {
+        id: user.id,
+        name: user.name,
+      },
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+}
+
+// DELETE /users/:id
+async function destroy(req, res) {
+  try {
+    const { id } = req.params;
+
+    const user = await User.findByPk(id);
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    await user.destroy();
+
+    res.json({ message: "User deleted successfully" });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+}
 
 module.exports = {
   index,
