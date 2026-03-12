@@ -37,7 +37,7 @@ async function show(req, res) {
 // POST /categories
 async function store(req, res) {
   try {
-    const { name, max_runs, competition_id } = req.body;
+    const { name, max_runs, competition_id, default_criterion_max_score } = req.body;
 
     const competition = await Competition.findByPk(competition_id);
 
@@ -49,6 +49,7 @@ async function store(req, res) {
       name,
       max_runs,
       competition_id,
+      default_criterion_max_score,
     });
 
     return res.status(201).json(category);

@@ -15,10 +15,9 @@ class Criterion extends Model {
         },
         max_score: {
           type: DataTypes.DECIMAL(5, 2),
-          allowNull: false,
+          allowNull: true,
           validate: {
-            min: 0,
-            max: 10,
+            min: 1,
           },
         },
         category_id: {

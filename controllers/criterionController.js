@@ -51,9 +51,19 @@ async function store(req, res) {
   try {
     const { name, max_score, category_id } = req.body;
 
+    const category = await Category.findByPk(category_id);
+    if (!category) {
+      return res.status(404).json({
+        message: "Category not found",
+      });
+    }
+
+    let maxScore;
+    !max_score ? (maxScore = category.default_criterion_max_score) : (maxScore = max_score);
+
     const criterion = await Criterion.create({
       name,
-      max_score,
+      max_score: maxScore,
       category_id,
     });
 

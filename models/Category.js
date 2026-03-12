@@ -24,6 +24,11 @@ class Category extends Model {
           type: DataTypes.BIGINT.UNSIGNED,
           allowNull: false,
         },
+        default_criterion_max_score: {
+          type: DataTypes.INTEGER.UNSIGNED,
+          allowNull: false,
+          validate: { min: 1 },
+        },
       },
       {
         sequelize,

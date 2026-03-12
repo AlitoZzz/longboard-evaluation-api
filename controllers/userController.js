@@ -14,7 +14,7 @@ async function store(req, res) {
       name,
       email,
       password: hashedPassword,
-      role: "judge",
+      role: "admin",
     });
 
     res.status(201).json({
