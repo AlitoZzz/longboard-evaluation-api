@@ -80,7 +80,8 @@ async function store(req, res) {
   const transaction = await sequelize.transaction();
 
   try {
-    const { run_id, judge_id, details } = req.body;
+    const { run_id, details } = req.body;
+    const judge_id = req.auth.id;
 
     if (!details || !Array.isArray(details) || details.length === 0) {
       return res.status(400).json({
@@ -107,15 +108,6 @@ async function store(req, res) {
     if (!run) {
       return res.status(404).json({
         message: "Run not found",
-      });
-    }
-
-    // verify judge exists
-    const judge = await User.findByPk(judge_id);
-
-    if (!judge) {
-      return res.status(404).json({
-        message: "Judge not found",
       });
     }
 
@@ -156,73 +148,6 @@ async function store(req, res) {
     if (criteriaIds.length !== validCriteriaIds.length) {
       return res.status(400).json({
         message: "All criteria must be scored",
-      });
-    }
-
-    const score = await Score.create(
-      {
-        run_id,
-        judge_id,
-      },
-      { transaction },
-    );
-
-    const scoreDetailsData = details.map((detail) => ({
-      score_id: score.id,
-      criterion_id: detail.criterion_id,
-      value: detail.value,
-    }));
-
-    await ScoreDetail.bulkCreate(scoreDetailsData, { transaction });
-
-    await transaction.commit();
-
-    return res.status(201).json(score);
-  } catch (error) {
-    await transaction.rollback();
-
-    console.error(error);
-    return res.status(500).json({
-      message: "Error creating score",
-    });
-  }
-}
-
-// POST /scores
-async function storeOG(req, res) {
-  const transaction = await sequelize.transaction();
-
-  try {
-    const { run_id, details } = req.body;
-    const judge_id = req.auth.id;
-
-    if (!details || !Array.isArray(details) || details.length === 0) {
-      return res.status(400).json({
-        message: "Score details are required",
-      });
-    }
-
-    // verify if there already is an existing score from a judge for a certain run
-    const existingScore = await Score.findOne({
-      where: { run_id, judge_id },
-    });
-
-    if (existingScore) {
-      return res.status(400).json({
-        message: "Judge has already scored this run",
-      });
-    }
-
-    // verify if all criteria are valid
-    const criteriaIds = details.map((d) => d.criterion_id);
-
-    const validCriteria = await Criterion.findAll({
-      where: { id: criteriaIds },
-    });
-
-    if (validCriteria.length !== criteriaIds.length) {
-      return res.status(400).json({
-        message: "One or more criteria are invalid",
       });
     }
 

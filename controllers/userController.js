@@ -1,7 +1,7 @@
 const bcrypt = require("bcrypt");
 const { User } = require("../models");
 
-const SALT_ROUNDS = 10;
+const SALT_ROUNDS = Number(process.env.SALT_ROUNDS);
 
 // POST /users
 async function store(req, res) {
@@ -59,13 +59,23 @@ async function show(req, res) {
 // PATCH /users/:id
 async function update(req, res) {
   try {
-    const { id } = req.params;
+    const id = Number(req.params.id);
     const { name, email, password } = req.body;
+    const userId = req.auth.id;
+    const role = req.auth.role;
+
+    if (role !== "admin" && userId !== id) {
+      return res.status(403).json({ message: "Forbidden" });
+    }
 
     const user = await User.findByPk(id);
 
     if (!user) {
       return res.status(404).json({ message: "User not found" });
+    }
+
+    if (user.role === "admin" && userId !== user.id) {
+      return res.status(403).json({ message: "Forbidden" });
     }
 
     if (password) {
@@ -92,7 +102,13 @@ async function update(req, res) {
 // DELETE /users/:id
 async function destroy(req, res) {
   try {
-    const { id } = req.params;
+    const id = Number(req.params.id);
+    const userId = req.auth.id;
+    const role = req.auth.role;
+
+    if (role !== "admin" && userId !== id) {
+      return res.status(403).json({ message: "Forbidden" });
+    }
 
     const user = await User.findByPk(id);
 

@@ -1,4 +1,12 @@
-const { Competitor, Category, Run, Score, ScoreDetail, Criterion } = require("../models");
+const {
+  Competitor,
+  Category,
+  Run,
+  Score,
+  ScoreDetail,
+  Criterion,
+  sequelize,
+} = require("../models");
 
 // GET /competitors
 async function index(req, res) {
@@ -42,17 +50,47 @@ async function show(req, res) {
 
 // POST /competitors
 async function store(req, res) {
+  const transaction = await sequelize.transaction();
+
   try {
     const { firstname, lastname, category_id } = req.body;
 
-    const competitor = await Competitor.create({
-      firstname,
-      lastname,
-      category_id,
+    const category = await Category.findByPk(category_id, { transaction: transaction });
+
+    if (!category) {
+      await transaction.rollback();
+      return res.status(404).json({ message: "Category not found" });
+    }
+
+    const competitor = await Competitor.create(
+      {
+        firstname,
+        lastname,
+        category_id,
+      },
+      { transaction: transaction },
+    );
+
+    const runs = [];
+
+    for (let i = 1; i <= category.max_runs; i++) {
+      runs.push({
+        number: i,
+        competitor_id: competitor.id,
+      });
+    }
+
+    await Run.bulkCreate(runs, { transaction: transaction });
+
+    await transaction.commit();
+
+    const competitorWithRuns = await Competitor.findByPk(competitor.id, {
+      include: { association: "runs" },
     });
 
-    return res.status(201).json(competitor);
+    return res.status(201).json(competitorWithRuns);
   } catch (error) {
+    await transaction.rollback();
     console.error(error);
     return res.status(500).json({ message: "Error creating competitor" });
   }

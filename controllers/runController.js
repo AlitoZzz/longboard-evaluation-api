@@ -47,31 +47,7 @@ async function show(req, res) {
 }
 
 // POST /runs
-async function store(req, res) {
-  try {
-    const { competitor_id, number } = req.body;
-
-    const competitor = await Competitor.findByPk(competitor_id);
-
-    if (!competitor) {
-      return res.status(404).json({
-        message: "Competitor not found",
-      });
-    }
-
-    const run = await Run.create({
-      competitor_id,
-      number,
-    });
-
-    return res.status(201).json(run);
-  } catch (error) {
-    console.error(error);
-    return res.status(500).json({
-      message: "Error creating run",
-    });
-  }
-}
+async function store(req, res) {}
 
 // PATCH /runs/:id
 async function update(req, res) {

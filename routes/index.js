@@ -12,6 +12,7 @@ const criterionRoutes = require("./criterionRoutes");
 const runRoutes = require("./runRoutes");
 const scoreRoutes = require("./scoreRoutes");
 const authRoutes = require("./authRoutes");
+const { expressjwt: checkJwt } = require("express-jwt");
 
 module.exports = (app) => {
   /*
@@ -24,13 +25,62 @@ module.exports = (app) => {
    * (en inglés y en plural). Del mismo modo, las rutas relativas a los artículos
    * se deberían agrupar bajo la URL `/articles` (en inglés y en plural).
    */
-  app.use("/users", userRoutes);
-  app.use("/competitions", competitionRoutes);
+  app.use(
+    "/users",
+    checkJwt({
+      secret: process.env.JWT_SECRET,
+      algorithms: [process.env.ALGORITHM],
+    }),
+    userRoutes,
+  );
+  app.use(
+    "/competitions",
+    checkJwt({
+      secret: process.env.JWT_SECRET,
+      algorithms: [process.env.ALGORITHM],
+    }),
+    competitionRoutes,
+  );
   app.use("/examples", exampleRoutes);
-  app.use("/categories", categoryRoutes);
-  app.use("/competitors", competitorRoutes);
-  app.use("/criteria", criterionRoutes);
-  app.use("/runs", runRoutes);
-  app.use("/scores", scoreRoutes);
+  app.use(
+    "/categories",
+    checkJwt({
+      secret: process.env.JWT_SECRET,
+      algorithms: [process.env.ALGORITHM],
+    }),
+    categoryRoutes,
+  );
+  app.use(
+    "/competitors",
+    checkJwt({
+      secret: process.env.JWT_SECRET,
+      algorithms: [process.env.ALGORITHM],
+    }),
+    competitorRoutes,
+  );
+  app.use(
+    "/criteria",
+    checkJwt({
+      secret: process.env.JWT_SECRET,
+      algorithms: [process.env.ALGORITHM],
+    }),
+    criterionRoutes,
+  );
+  app.use(
+    "/runs",
+    checkJwt({
+      secret: process.env.JWT_SECRET,
+      algorithms: [process.env.ALGORITHM],
+    }),
+    runRoutes,
+  );
+  app.use(
+    "/scores",
+    checkJwt({
+      secret: process.env.JWT_SECRET,
+      algorithms: [process.env.ALGORITHM],
+    }),
+    scoreRoutes,
+  );
   app.use("/auth", authRoutes);
 };

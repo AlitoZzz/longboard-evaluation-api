@@ -1,18 +1,12 @@
 const express = require("express");
 const router = express.Router();
 const userController = require("../controllers/userController");
-
-/*
- * API endpoints relacionados a los usuarios.
- *
- * Notar que todos estos endpoints tienen como prefijo el string "/users",
- * tal como se definió en el archivo `routes/index.js`.
- */
+const adminRequired = require("../middlewares/requireAdmin");
 
 router.get("/", userController.index);
-router.post("/", userController.store);
+router.post("/", adminRequired, userController.store);
 router.get("/:id", userController.show);
-router.patch("/:id", userController.update);
-router.delete("/:id", userController.destroy);
+router.patch("/:id", userController.update); //solo su propia info si no es admin YA HECHO
+router.delete("/:id", adminRequired, userController.destroy);
 
 module.exports = router;
