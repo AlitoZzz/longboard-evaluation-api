@@ -181,11 +181,25 @@ async function getScoreSheet(req, res) {
 
     const category = run.competitor.category;
 
+    const judge_id = req.auth.id;
+
+    const existingScore = await Score.findOne({
+      where: {
+        run_id: run.id,
+        judge_id,
+      },
+      include: {
+        model: ScoreDetail,
+        as: "scoreDetails",
+      },
+    });
+
     return res.json({
       run_id: run.id,
       competitor: {
         id: run.competitor.id,
-        name: run.competitor.name,
+        firstname: run.competitor.firstname,
+        lastname: run.competitor.lastname,
       },
       category: {
         id: category.id,
@@ -194,8 +208,19 @@ async function getScoreSheet(req, res) {
       criteria: category.criteria.map((c) => ({
         id: c.id,
         name: c.name,
-        max_value: c.max_value,
+        max_score: c.max_score,
       })),
+      already_scored: !!existingScore,
+
+      existing_score: existingScore
+        ? {
+            id: existingScore.id,
+            details: existingScore.scoreDetails.map((d) => ({
+              criterion_id: d.criterion_id,
+              value: d.value,
+            })),
+          }
+        : null,
     });
   } catch (error) {
     console.error(error);
@@ -268,6 +293,108 @@ async function getRunResults(req, res) {
   }
 }
 
+//PATCH runs/:id/start
+async function startRun(req, res) {
+  const { id } = req.params;
+
+  const activeRun = await Run.findOne({
+    where: { status: "active" },
+  });
+
+  if (activeRun) {
+    return res.status(400).json({
+      message: "There is already an active run",
+    });
+  }
+
+  const run = await Run.findByPk(id);
+
+  if (!run) {
+    return res.status(404).json({
+      message: "Run not found",
+    });
+  }
+
+  await run.update({
+    status: "active",
+  });
+
+  return res.json(run);
+}
+
+// PATCH runs/complete
+async function completeRun(req, res) {
+  const run = await Run.findOne({
+    where: { status: "active" },
+  });
+
+  if (!run) {
+    return res.status(400).json({
+      message: "There is no active run",
+    });
+  }
+
+  await run.update({
+    status: "completed",
+  });
+
+  return res.json(run);
+}
+
+// GET /runs/active
+async function getActiveRun(req, res) {
+  try {
+    const run = await Run.findOne({
+      where: {
+        status: "active",
+      },
+      include: [
+        {
+          model: Competitor,
+          as: "competitor",
+          attributes: ["id", "firstname", "lastname"],
+          include: [
+            {
+              model: Category,
+              as: "category",
+              attributes: ["id", "name"],
+            },
+          ],
+        },
+      ],
+    });
+
+    if (!run) {
+      return res.status(200).json({
+        active_run: null,
+      });
+    }
+
+    return res.status(200).json({
+      id: run.id,
+      number: run.number,
+      status: run.status,
+
+      competitor: {
+        id: run.competitor.id,
+        firstname: run.competitor.firstname,
+        lastname: run.competitor.lastname,
+      },
+
+      category: {
+        id: run.competitor.category.id,
+        name: run.competitor.category.name,
+      },
+    });
+  } catch (error) {
+    console.error(error);
+
+    return res.status(500).json({
+      message: "Error retrieving active run",
+    });
+  }
+}
+
 module.exports = {
   index,
   show,
@@ -278,4 +405,7 @@ module.exports = {
   getCategoryRuns,
   getScoreSheet,
   getRunResults,
+  startRun,
+  completeRun,
+  getActiveRun,
 };

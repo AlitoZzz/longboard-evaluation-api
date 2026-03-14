@@ -110,10 +110,17 @@ async function store(req, res) {
         message: "Run not found",
       });
     }
+    if (run.status !== "active") {
+      return res.status(400).json({
+        message: "Run is not active",
+      });
+    }
 
     // verify judge has not already scored this run
     const existingScore = await Score.findOne({
       where: { run_id, judge_id },
+      transaction,
+      lock: true,
     });
 
     if (existingScore) {
@@ -151,6 +158,26 @@ async function store(req, res) {
       });
     }
 
+    // check max_score per criterion
+    const criteria = run.competitor.category.criteria;
+    for (const detail of details) {
+      const criterion = criteria.find((c) => c.id === detail.criterion_id);
+      if (!criterion) {
+        return res.status(400).json({ message: "Invalid criterion" });
+      }
+      if (typeof detail.value !== "number") {
+        return res.status(400).json({ message: `Score for ${criterion.name} must be a number` });
+      }
+      if (detail.value < 0) {
+        return res.status(400).json({ message: `Score for ${criterion.name} cannot be negative` });
+      }
+      if (detail.value > criterion.max_score) {
+        return res
+          .status(400)
+          .json({ message: `${criterion.name} max score is ${criterion.max_score}` });
+      }
+    }
+
     const score = await Score.create(
       {
         run_id,
@@ -169,7 +196,16 @@ async function store(req, res) {
 
     await transaction.commit();
 
-    return res.status(201).json(score);
+    const createdScore = await Score.findByPk(score.id, {
+      include: [
+        {
+          model: ScoreDetail,
+          as: "scoreDetails",
+        },
+      ],
+    });
+
+    return res.status(201).json(createdScore);
   } catch (error) {
     await transaction.rollback();
 

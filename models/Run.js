@@ -20,6 +20,11 @@ class Run extends Model {
           type: DataTypes.BIGINT.UNSIGNED,
           allowNull: false,
         },
+        status: {
+          type: DataTypes.ENUM("pending", "active", "completed"),
+          allowNull: false,
+          defaultValue: "pending",
+        },
       },
       {
         sequelize,
