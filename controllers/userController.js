@@ -1,21 +1,58 @@
 const bcrypt = require("bcrypt");
-const { User } = require("../models");
+const { User, Category, sequelize } = require("../models");
 
 const SALT_ROUNDS = Number(process.env.SALT_ROUNDS);
 
 // POST /users
 async function store(req, res) {
+  const transaction = await sequelize.transaction();
+
   try {
-    const { name, email, password } = req.body;
+    const { name, email, password, categoryIds } = req.body;
+
+    const existingUser = await User.findOne({
+      where: { email },
+      transaction,
+    });
+
+    if (existingUser) {
+      await transaction.rollback();
+      return res.status(409).json({
+        message: "Email already in use",
+      });
+    }
 
     const hashedPassword = await bcrypt.hash(password, SALT_ROUNDS);
 
-    const user = await User.create({
-      name,
-      email,
-      password: hashedPassword,
-      role: "admin",
-    });
+    const user = await User.create(
+      {
+        name,
+        email,
+        password: hashedPassword,
+        role: "judge",
+      },
+      { transaction },
+    );
+
+    // validate categories
+    if (categoryIds && categoryIds.length > 0) {
+      const categories = await Category.findAll({
+        where: { id: categoryIds },
+        transaction,
+      });
+
+      if (categories.length !== categoryIds.length) {
+        await transaction.rollback();
+        return res.status(400).json({
+          message: "One or more categories are invalid",
+        });
+      }
+
+      // assign categories
+      await user.setCategories(categoryIds, { transaction });
+    }
+
+    await transaction.commit();
 
     res.status(201).json({
       user: {
@@ -24,6 +61,7 @@ async function store(req, res) {
       },
     });
   } catch (error) {
+    await transaction.rollback();
     res.status(500).json({ error: error.message });
   }
 }
@@ -124,10 +162,59 @@ async function destroy(req, res) {
   }
 }
 
+// PATCH /users/:id/categories
+async function setJudgeCategories(req, res) {
+  const { id } = req.params;
+  const { categoryIds } = req.body;
+
+  try {
+    const judge = await User.findByPk(id);
+
+    if (!judge) {
+      return res.status(404).json({
+        message: "Judge not found",
+      });
+    }
+
+    if (judge.role !== "judge") {
+      return res.status(400).json({
+        message: "User is not a judge",
+      });
+    }
+
+    // Validate categories
+    const categories = await Category.findAll({
+      where: {
+        id: categoryIds,
+      },
+    });
+
+    if (categories.length !== categoryIds.length) {
+      return res.status(400).json({
+        message: "One or more categories are invalid",
+      });
+    }
+
+    // synchronize relations
+    await judge.setCategories(categoryIds);
+
+    return res.status(200).json({
+      message: "Categories assigned successfully",
+    });
+  } catch (error) {
+    console.error(error);
+
+    return res.status(500).json({
+      message: "Error assigning categories",
+    });
+  }
+}
+
 module.exports = {
   index,
   show,
   store,
   update,
   destroy,
+  setJudgeCategories,
 };

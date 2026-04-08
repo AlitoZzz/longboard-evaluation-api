@@ -84,6 +84,7 @@ async function store(req, res) {
     const judge_id = req.auth.id;
 
     if (!details || !Array.isArray(details) || details.length === 0) {
+      await transaction.rollback();
       return res.status(400).json({
         message: "Score details are required",
       });
@@ -106,13 +107,38 @@ async function store(req, res) {
     });
 
     if (!run) {
+      await transaction.rollback();
       return res.status(404).json({
         message: "Run not found",
       });
     }
+
     if (run.status !== "active") {
+      await transaction.rollback();
       return res.status(400).json({
         message: "Run is not active",
+      });
+    }
+
+    // validate if judge can evaluate run`s category
+    const judge = await User.findByPk(judge_id, {
+      include: {
+        model: Category,
+        as: "categories",
+        attributes: ["id"],
+        through: { attributes: [] },
+      },
+      transaction,
+    });
+
+    const allowedCategoryIds = judge.categories.map((c) => c.id);
+
+    const runCategoryId = run.competitor.category.id;
+
+    if (!allowedCategoryIds.includes(runCategoryId)) {
+      await transaction.rollback();
+      return res.status(403).json({
+        message: "Judge not allowed to score this category",
       });
     }
 
@@ -120,10 +146,10 @@ async function store(req, res) {
     const existingScore = await Score.findOne({
       where: { run_id, judge_id },
       transaction,
-      lock: true,
     });
 
     if (existingScore) {
+      await transaction.rollback();
       return res.status(400).json({
         message: "Judge has already scored this run",
       });
@@ -135,6 +161,7 @@ async function store(req, res) {
     const uniqueCriteria = new Set(criteriaIds);
 
     if (uniqueCriteria.size !== criteriaIds.length) {
+      await transaction.rollback();
       return res.status(400).json({
         message: "Duplicate criteria in score details",
       });
@@ -146,6 +173,7 @@ async function store(req, res) {
     const allValid = criteriaIds.every((id) => validCriteriaIds.includes(id));
 
     if (!allValid) {
+      await transaction.rollback();
       return res.status(400).json({
         message: "Criteria do not belong to this category",
       });
@@ -153,6 +181,7 @@ async function store(req, res) {
 
     // prevent partial evaluations
     if (criteriaIds.length !== validCriteriaIds.length) {
+      await transaction.rollback();
       return res.status(400).json({
         message: "All criteria must be scored",
       });
@@ -162,19 +191,31 @@ async function store(req, res) {
     const criteria = run.competitor.category.criteria;
     for (const detail of details) {
       const criterion = criteria.find((c) => c.id === detail.criterion_id);
+
       if (!criterion) {
+        await transaction.rollback();
         return res.status(400).json({ message: "Invalid criterion" });
       }
+
       if (typeof detail.value !== "number") {
-        return res.status(400).json({ message: `Score for ${criterion.name} must be a number` });
+        await transaction.rollback();
+        return res.status(400).json({
+          message: `Score for ${criterion.name} must be a number`,
+        });
       }
+
       if (detail.value < 0) {
-        return res.status(400).json({ message: `Score for ${criterion.name} cannot be negative` });
+        await transaction.rollback();
+        return res.status(400).json({
+          message: `Score for ${criterion.name} cannot be negative`,
+        });
       }
+
       if (detail.value > criterion.max_score) {
-        return res
-          .status(400)
-          .json({ message: `${criterion.name} max score is ${criterion.max_score}` });
+        await transaction.rollback();
+        return res.status(400).json({
+          message: `${criterion.name} max score is ${criterion.max_score}`,
+        });
       }
     }
 
@@ -209,7 +250,14 @@ async function store(req, res) {
   } catch (error) {
     await transaction.rollback();
 
+    if (error.name === "SequelizeUniqueConstraintError") {
+      return res.status(400).json({
+        message: "Judge has already scored this run",
+      });
+    }
+
     console.error(error);
+
     return res.status(500).json({
       message: "Error creating score",
     });

@@ -343,7 +343,26 @@ async function completeRun(req, res) {
 
 // GET /runs/active
 async function getActiveRun(req, res) {
+  const judge_id = req.auth.id;
+
   try {
+    const judge = await User.findByPk(judge_id, {
+      include: {
+        model: Category,
+        as: "categories",
+        attributes: ["id"],
+        through: { attributes: [] },
+      },
+    });
+
+    const allowedCategoryIds = judge.categories.map((c) => c.id);
+
+    if (allowedCategoryIds.length === 0) {
+      return res.status(200).json({
+        active_run: null,
+      });
+    }
+
     const run = await Run.findOne({
       where: {
         status: "active",
@@ -358,10 +377,20 @@ async function getActiveRun(req, res) {
               model: Category,
               as: "category",
               attributes: ["id", "name"],
+              where: {
+                id: allowedCategoryIds, // filter - only looking for an active run if it`s category is one of the allowed for the judge
+              },
             },
           ],
         },
       ],
+    });
+
+    res.set({
+      "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
+      Pragma: "no-cache",
+      Expires: "0",
+      "Surrogate-Control": "no-store",
     });
 
     if (!run) {
@@ -370,20 +399,31 @@ async function getActiveRun(req, res) {
       });
     }
 
-    return res.status(200).json({
-      id: run.id,
-      number: run.number,
-      status: run.status,
-
-      competitor: {
-        id: run.competitor.id,
-        firstname: run.competitor.firstname,
-        lastname: run.competitor.lastname,
+    const existingScore = await Score.findOne({
+      where: {
+        run_id: run.id,
+        judge_id: judge_id,
       },
+    });
 
-      category: {
-        id: run.competitor.category.id,
-        name: run.competitor.category.name,
+    return res.status(200).json({
+      active_run: {
+        id: run.id,
+        number: run.number,
+        status: run.status,
+
+        already_scored: !!existingScore,
+
+        competitor: {
+          id: run.competitor.id,
+          firstname: run.competitor.firstname,
+          lastname: run.competitor.lastname,
+        },
+
+        category: {
+          id: run.competitor.category.id,
+          name: run.competitor.category.name,
+        },
       },
     });
   } catch (error) {

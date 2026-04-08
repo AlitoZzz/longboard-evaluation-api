@@ -20,6 +20,7 @@ const Run = require("./Run");
 const Criterion = require("./Criterion");
 const Score = require("./Score");
 const ScoreDetail = require("./ScoreDetail");
+const JudgeCategory = require("./JudgeCategory");
 
 // Inicializar todos los modelos:
 User.initModel(sequelize);
@@ -30,6 +31,7 @@ Run.initModel(sequelize);
 Criterion.initModel(sequelize);
 Score.initModel(sequelize);
 ScoreDetail.initModel(sequelize);
+JudgeCategory.initModel(sequelize);
 
 /*
  * Luego de definir los modelos, se pueden establecer relaciones entre los
@@ -63,6 +65,20 @@ Category.hasMany(Criterion, {
 Criterion.belongsTo(Category, {
   foreignKey: "category_id",
   as: "category",
+});
+
+User.belongsToMany(Category, {
+  through: JudgeCategory,
+  foreignKey: "judge_id",
+  otherKey: "category_id",
+  as: "categories",
+});
+
+Category.belongsToMany(User, {
+  through: JudgeCategory,
+  foreignKey: "category_id",
+  otherKey: "judge_id",
+  as: "judges",
 });
 
 Competitor.hasMany(Run, {
@@ -125,4 +141,5 @@ module.exports = {
   Criterion,
   Score,
   ScoreDetail,
+  JudgeCategory,
 };
