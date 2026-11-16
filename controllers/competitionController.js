@@ -34,17 +34,28 @@ async function show(req, res) {
 async function store(req, res) {
   try {
     const { name, date, location } = req.body;
+    const admin_id = req.auth.id;
 
     const competition = await Competition.create({
       name,
       date,
       location,
+      admin_id,
     });
 
     return res.status(201).json(competition);
   } catch (error) {
     console.error(error);
-    return res.status(500).json({ message: "Error creating competition" });
+
+    if (error.name === "SequelizeValidationError") {
+      return res.status(400).json({
+        message: "Invalid competition data",
+      });
+    }
+
+    return res.status(500).json({
+      message: "Error creating competition",
+    });
   }
 }
 
@@ -69,7 +80,16 @@ async function update(req, res) {
     return res.json(competition);
   } catch (error) {
     console.error(error);
-    return res.status(500).json({ message: "Error updating competition" });
+
+    if (error.name === "SequelizeValidationError") {
+      return res.status(400).json({
+        message: "Invalid competition data",
+      });
+    }
+
+    return res.status(500).json({
+      message: "Error updating competition",
+    });
   }
 }
 
@@ -86,10 +106,14 @@ async function destroy(req, res) {
 
     await competition.destroy();
 
-    return res.status(200).json({ message: "Competition successfully deleted" });
+    return res.status(200).json({
+      message: "Competition successfully deleted",
+    });
   } catch (error) {
     console.error(error);
-    return res.status(500).json({ message: "Error deleting competition" });
+    return res.status(500).json({
+      message: "Error deleting competition",
+    });
   }
 }
 

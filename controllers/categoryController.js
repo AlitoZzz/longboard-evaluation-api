@@ -1,4 +1,15 @@
-const { Competition, Category, Competitor, Run, Score, ScoreDetail } = require("../models");
+const {
+  Competition,
+  Category,
+  Competitor,
+  Run,
+  Score,
+  ScoreDetail,
+  User,
+  sequelize,
+} = require("../models");
+
+const calculateRunResult = require("../utils/claculateRunResults");
 
 // GET /categories
 async function index(req, res) {
@@ -10,7 +21,10 @@ async function index(req, res) {
     return res.json(categories);
   } catch (error) {
     console.error(error);
-    return res.status(500).json({ message: "Error fetching categories" });
+
+    return res.status(500).json({
+      message: "Error fetching categories",
+    });
   }
 }
 
@@ -24,13 +38,18 @@ async function show(req, res) {
     });
 
     if (!category) {
-      return res.status(404).json({ message: "Category not found" });
+      return res.status(404).json({
+        message: "Category not found",
+      });
     }
 
     return res.json(category);
   } catch (error) {
     console.error(error);
-    return res.status(500).json({ message: "Error fetching category" });
+
+    return res.status(500).json({
+      message: "Error fetching category",
+    });
   }
 }
 
@@ -42,7 +61,9 @@ async function store(req, res) {
     const competition = await Competition.findByPk(competition_id);
 
     if (!competition) {
-      return res.status(404).json({ message: "Competition not found" });
+      return res.status(404).json({
+        message: "Competition not found",
+      });
     }
 
     const category = await Category.create({
@@ -55,7 +76,16 @@ async function store(req, res) {
     return res.status(201).json(category);
   } catch (error) {
     console.error(error);
-    return res.status(500).json({ message: "Error creating category" });
+
+    if (error.name === "SequelizeValidationError") {
+      return res.status(400).json({
+        message: "Invalid category data",
+      });
+    }
+
+    return res.status(500).json({
+      message: "Error creating category",
+    });
   }
 }
 
@@ -68,7 +98,21 @@ async function update(req, res) {
     const category = await Category.findByPk(id);
 
     if (!category) {
-      return res.status(404).json({ message: "Category not found" });
+      return res.status(404).json({
+        message: "Category not found",
+      });
+    }
+
+    if (category.status === "active") {
+      return res.status(400).json({
+        message: "Cannot update an active category",
+      });
+    }
+
+    if (category.status === "completed") {
+      return res.status(400).json({
+        message: "Cannot update a completed category",
+      });
     }
 
     await category.update({
@@ -79,7 +123,125 @@ async function update(req, res) {
     return res.json(category);
   } catch (error) {
     console.error(error);
-    return res.status(500).json({ message: "Error updating category" });
+
+    if (error.name === "SequelizeValidationError") {
+      return res.status(400).json({
+        message: "Invalid category data",
+      });
+    }
+
+    return res.status(500).json({
+      message: "Error updating category",
+    });
+  }
+}
+
+// PATCH /categories/:id/complete
+
+// PATCH /categories/:id/complete
+async function completeCategory(req, res) {
+  const transaction = await sequelize.transaction();
+
+  try {
+    const { id } = req.params;
+
+    const category = await Category.findByPk(id, {
+      transaction,
+    });
+
+    if (!category) {
+      await transaction.rollback();
+
+      return res.status(404).json({
+        message: "Category not found",
+      });
+    }
+
+    if (category.status === "draft") {
+      await transaction.rollback();
+
+      return res.status(400).json({
+        message: "No se puede finalizar la categoría que todavía no comenzó",
+      });
+    }
+
+    if (category.status === "completed") {
+      await transaction.rollback();
+
+      return res.status(400).json({
+        message: "Category is already completed",
+      });
+    }
+
+    const activeRun = await Run.findOne({
+      where: {
+        status: "active",
+      },
+      include: {
+        model: Competitor,
+        as: "competitor",
+        where: {
+          category_id: id,
+        },
+        attributes: ["id"],
+      },
+      transaction,
+    });
+
+    if (activeRun) {
+      await transaction.rollback();
+
+      return res.status(400).json({
+        message: "No se puede finalizar la categoría mientras haya rondas en curso.",
+      });
+    }
+
+    await category.update(
+      {
+        status: "completed",
+      },
+      { transaction },
+    );
+
+    const categories = await Category.findAll({
+      where: {
+        competition_id: category.competition_id,
+      },
+      attributes: ["status"],
+      transaction,
+    });
+
+    const allCategoriesCompleted = categories.every((category) => category.status === "completed");
+
+    if (allCategoriesCompleted) {
+      await Competition.update(
+        {
+          status: "completed",
+        },
+        {
+          where: {
+            id: category.competition_id,
+          },
+          transaction,
+        },
+      );
+    }
+
+    await transaction.commit();
+
+    return res.json({
+      message: "Category completed successfully",
+      category,
+      competition_completed: allCategoriesCompleted,
+    });
+  } catch (error) {
+    await transaction.rollback();
+
+    console.error(error);
+
+    return res.status(500).json({
+      message: "Error completing category",
+    });
   }
 }
 
@@ -91,7 +253,9 @@ async function destroy(req, res) {
     const category = await Category.findByPk(id);
 
     if (!category) {
-      return res.status(404).json({ message: "Category not found" });
+      return res.status(404).json({
+        message: "Category not found",
+      });
     }
 
     await category.destroy();
@@ -101,7 +265,10 @@ async function destroy(req, res) {
     });
   } catch (error) {
     console.error(error);
-    return res.status(500).json({ message: "Error deleting category" });
+
+    return res.status(500).json({
+      message: "Error deleting category",
+    });
   }
 }
 
@@ -115,13 +282,18 @@ async function getCompetitionCategories(req, res) {
     });
 
     if (!competition) {
-      return res.status(404).json({ message: "Competition not found" });
+      return res.status(404).json({
+        message: "Competition not found",
+      });
     }
 
     return res.json(competition.categories);
   } catch (error) {
     console.error(error);
-    return res.status(500).json({ message: "Error fetching categories" });
+
+    return res.status(500).json({
+      message: "Error fetching categories",
+    });
   }
 }
 
@@ -132,6 +304,11 @@ async function getRanking(req, res) {
 
     const category = await Category.findByPk(id, {
       include: [
+        {
+          model: User,
+          as: "judges",
+          attributes: ["id"],
+        },
         {
           model: Competitor,
           as: "competitors",
@@ -163,27 +340,43 @@ async function getRanking(req, res) {
       });
     }
 
-    const ranking = category.competitors.map((competitor) => {
-      const runTotals = competitor.runs.map((run) => {
-        const judgeTotals = run.scores.map((score) =>
-          score.scoreDetails.reduce((sum, detail) => sum + Number(detail.value), 0),
-        );
+    const totalJudges = category.judges.length;
 
-        if (!judgeTotals.length) return 0;
-
-        const runAverage = judgeTotals.reduce((sum, total) => sum + total, 0) / judgeTotals.length;
-
-        return runAverage;
+    if (totalJudges === 0) {
+      return res.json({
+        category_id: category.id,
+        category_name: category.name,
+        ranking: [],
       });
+    }
 
-      const bestRun = runTotals.length ? Math.max(...runTotals) : 0;
+    const ranking = category.competitors
+      .map((competitor) => {
+        const validRunResults = competitor.runs
+          .map((run) => {
+            const { finalScore, judgeCount } = calculateRunResult(run.scores);
 
-      return {
-        competitor_id: competitor.id,
-        competitor_name: `${competitor.firstname} ${competitor.lastname}`,
-        best_run: bestRun,
-      };
-    });
+            if (judgeCount !== totalJudges) {
+              return null;
+            }
+
+            return finalScore;
+          })
+          .filter((score) => score !== null);
+
+        if (validRunResults.length === 0) {
+          return null;
+        }
+
+        const bestRun = Math.max(...validRunResults);
+
+        return {
+          competitor_id: competitor.id,
+          competitor_name: `${competitor.firstname} ${competitor.lastname}`,
+          best_run: Number(bestRun.toFixed(2)),
+        };
+      })
+      .filter(Boolean);
 
     ranking.sort((a, b) => b.best_run - a.best_run);
 
@@ -214,4 +407,5 @@ module.exports = {
   destroy,
   getCompetitionCategories,
   getRanking,
+  completeCategory,
 };

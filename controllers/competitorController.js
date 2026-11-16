@@ -5,8 +5,12 @@ const {
   Score,
   ScoreDetail,
   Criterion,
+  Competition,
+  User,
   sequelize,
 } = require("../models");
+
+const calculateRunResult = require("../utils/claculateRunResults");
 
 // GET /competitors
 async function index(req, res) {
@@ -21,7 +25,9 @@ async function index(req, res) {
     return res.json(competitors);
   } catch (error) {
     console.error(error);
-    return res.status(500).json({ message: "Error fetching competitors" });
+    return res.status(500).json({
+      message: "Error fetching competitors",
+    });
   }
 }
 
@@ -38,13 +44,17 @@ async function show(req, res) {
     });
 
     if (!competitor) {
-      return res.status(404).json({ message: "Competitor not found" });
+      return res.status(404).json({
+        message: "Competitor not found",
+      });
     }
 
     return res.json(competitor);
   } catch (error) {
     console.error(error);
-    return res.status(500).json({ message: "Error fetching competitor" });
+    return res.status(500).json({
+      message: "Error fetching competitor",
+    });
   }
 }
 
@@ -55,11 +65,58 @@ async function store(req, res) {
   try {
     const { firstname, lastname, category_id } = req.body;
 
-    const category = await Category.findByPk(category_id, { transaction: transaction });
+    const category = await Category.findByPk(category_id, {
+      include: [
+        {
+          model: Competition,
+          as: "competition",
+        },
+        {
+          model: Criterion,
+          as: "criteria",
+          attributes: ["id"],
+        },
+        {
+          model: User,
+          as: "judges",
+          attributes: ["id"],
+        },
+      ],
+      transaction: transaction,
+    });
 
     if (!category) {
       await transaction.rollback();
-      return res.status(404).json({ message: "Category not found" });
+
+      return res.status(404).json({
+        message: "Category not found",
+      });
+    }
+
+    if (category.status === "completed") {
+      await transaction.rollback();
+
+      return res.status(400).json({
+        message: "Cannot register a competitor in a completed category",
+      });
+    }
+
+    if (category.status === "draft") {
+      if (category.criteria.length === 0) {
+        await transaction.rollback();
+
+        return res.status(400).json({
+          message: "Category must have at least one criterion",
+        });
+      }
+
+      if (category.judges.length === 0) {
+        await transaction.rollback();
+
+        return res.status(400).json({
+          message: "La categoría debe tener al menos un juez asignado.",
+        });
+      }
     }
 
     const competitor = await Competitor.create(
@@ -71,6 +128,24 @@ async function store(req, res) {
       { transaction: transaction },
     );
 
+    if (category.status === "draft") {
+      await category.update(
+        {
+          status: "active",
+        },
+        { transaction: transaction },
+      );
+
+      if (category.competition.status === "draft") {
+        await category.competition.update(
+          {
+            status: "active",
+          },
+          { transaction: transaction },
+        );
+      }
+    }
+
     const runs = [];
 
     for (let i = 1; i <= category.max_runs; i++) {
@@ -80,7 +155,9 @@ async function store(req, res) {
       });
     }
 
-    await Run.bulkCreate(runs, { transaction: transaction });
+    await Run.bulkCreate(runs, {
+      transaction: transaction,
+    });
 
     await transaction.commit();
 
@@ -91,8 +168,18 @@ async function store(req, res) {
     return res.status(201).json(competitorWithRuns);
   } catch (error) {
     await transaction.rollback();
+
     console.error(error);
-    return res.status(500).json({ message: "Error creating competitor" });
+
+    if (error.name === "SequelizeValidationError") {
+      return res.status(400).json({
+        message: "Invalid competitor data",
+      });
+    }
+
+    return res.status(500).json({
+      message: "Error creating competitor",
+    });
   }
 }
 
@@ -100,19 +187,34 @@ async function store(req, res) {
 async function update(req, res) {
   try {
     const { id } = req.params;
+    const { firstname, lastname } = req.body;
 
     const competitor = await Competitor.findByPk(id);
 
     if (!competitor) {
-      return res.status(404).json({ message: "Competitor not found" });
+      return res.status(404).json({
+        message: "Competitor not found",
+      });
     }
 
-    await competitor.update(req.body);
+    await competitor.update({
+      firstname,
+      lastname,
+    });
 
     return res.json(competitor);
   } catch (error) {
     console.error(error);
-    return res.status(500).json({ message: "Error updating competitor" });
+
+    if (error.name === "SequelizeValidationError") {
+      return res.status(400).json({
+        message: "Invalid competitor data",
+      });
+    }
+
+    return res.status(500).json({
+      message: "Error updating competitor",
+    });
   }
 }
 
@@ -124,7 +226,9 @@ async function destroy(req, res) {
     const competitor = await Competitor.findByPk(id);
 
     if (!competitor) {
-      return res.status(404).json({ message: "Competitor not found" });
+      return res.status(404).json({
+        message: "Competitor not found",
+      });
     }
 
     await competitor.destroy();
@@ -134,7 +238,10 @@ async function destroy(req, res) {
     });
   } catch (error) {
     console.error(error);
-    return res.status(500).json({ message: "Error deleting competitor" });
+
+    return res.status(500).json({
+      message: "Error deleting competitor",
+    });
   }
 }
 
@@ -149,6 +256,7 @@ async function getCategoryCompetitors(req, res) {
     return res.json(competitors);
   } catch (error) {
     console.error(error);
+
     return res.status(500).json({
       message: "Error fetching competitors",
     });
@@ -184,51 +292,27 @@ async function getCompetitorResults(req, res) {
     });
 
     if (!competitor) {
-      return res.status(404).json({ message: "Competitor not found" });
-    }
-
-    const runsResults = [];
-
-    for (const run of competitor.runs) {
-      let score = 0;
-
-      const judgeCount = run.scores?.length || 0;
-
-      for (const scoreEntry of run.scores) {
-        for (const detail of scoreEntry.scoreDetails) {
-          score += parseFloat(detail.value);
-        }
-      }
-
-      let criteria = [];
-
-      if (run.scores.length > 0) {
-        criteria = run.scores[0].scoreDetails.map((detail) => detail.criterion);
-      }
-
-      const criteriaCount = criteria.length;
-
-      const maxCriteriaScore = criteria.reduce((sum, c) => sum + Number(c?.max_score || 0), 0);
-
-      const maxScore = maxCriteriaScore * judgeCount;
-
-      const normalizedScore = maxScore > 0 ? Number(((score / maxScore) * 100).toFixed(2)) : 0;
-
-      runsResults.push({
-        runId: run.id,
-        score,
-        maxScore,
-        judgeCount,
-        criteriaCount,
-        normalizedScore,
+      return res.status(404).json({
+        message: "Competitor not found",
       });
     }
+
+    const runsResults = competitor.runs.map((run) => {
+      const { finalScore, judgeCount } = calculateRunResult(run.scores);
+
+      return {
+        run_id: run.id,
+        run_number: run.number,
+        final_score: Number(finalScore.toFixed(2)),
+        judge_count: judgeCount,
+      };
+    });
 
     let bestRun = null;
 
     if (runsResults.length > 0) {
       bestRun = runsResults.reduce((best, current) =>
-        current.score > best.score ? current : best,
+        current.final_score > best.final_score ? current : best,
       );
     }
 
@@ -245,15 +329,18 @@ async function getCompetitorResults(req, res) {
           : null,
       },
 
-      totalRuns: runsResults.length,
+      total_runs: runsResults.length,
 
       runs: runsResults,
 
-      bestRun,
+      best_run: bestRun,
     });
   } catch (error) {
     console.error(error);
-    return res.status(500).json({ message: "Internal server error" });
+
+    return res.status(500).json({
+      message: "Internal server error",
+    });
   }
 }
 

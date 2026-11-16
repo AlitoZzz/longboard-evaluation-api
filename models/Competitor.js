@@ -12,10 +12,16 @@ class Competitor extends Model {
         firstname: {
           type: DataTypes.STRING(100),
           allowNull: false,
+          validate: {
+            notEmpty: true,
+          },
         },
         lastname: {
           type: DataTypes.STRING(100),
           allowNull: false,
+          validate: {
+            notEmpty: true,
+          },
         },
         category_id: {
           type: DataTypes.BIGINT.UNSIGNED,

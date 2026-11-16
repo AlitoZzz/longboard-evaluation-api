@@ -1,4 +1,5 @@
 const { Run, Competitor, Category, Score, ScoreDetail, User, Criterion } = require("../models");
+const calculateRunResult = require("../utils/claculateRunResults");
 
 // GET /runs
 async function index(req, res) {
@@ -46,59 +47,6 @@ async function show(req, res) {
   }
 }
 
-// POST /runs
-async function store(req, res) {}
-
-// PATCH /runs/:id
-async function update(req, res) {
-  try {
-    const { id } = req.params;
-
-    const run = await Run.findByPk(id);
-
-    if (!run) {
-      return res.status(404).json({
-        message: "Run not found",
-      });
-    }
-
-    await run.update(req.body);
-
-    return res.json(run);
-  } catch (error) {
-    console.error(error);
-    return res.status(500).json({
-      message: "Error updating run",
-    });
-  }
-}
-
-// DELETE /runs/:id
-async function destroy(req, res) {
-  try {
-    const { id } = req.params;
-
-    const run = await Run.findByPk(id);
-
-    if (!run) {
-      return res.status(404).json({
-        message: "Run not found",
-      });
-    }
-
-    await run.destroy();
-
-    return res.status(200).json({
-      message: "Run deleted successfully",
-    });
-  } catch (error) {
-    console.error(error);
-    return res.status(500).json({
-      message: "Error deleting run",
-    });
-  }
-}
-
 // GET /competitors/:id/runs
 async function getCompetitorRuns(req, res) {
   try {
@@ -126,6 +74,23 @@ async function getCategoryRuns(req, res) {
   try {
     const { id } = req.params;
 
+    const category = await Category.findByPk(id, {
+      include: {
+        model: User,
+        as: "judges",
+        attributes: ["id"],
+        through: {
+          attributes: [],
+        },
+      },
+    });
+
+    if (!category) {
+      return res.status(404).json({
+        message: "Category not found",
+      });
+    }
+
     const runs = await Run.findAll({
       include: {
         model: Competitor,
@@ -138,9 +103,36 @@ async function getCategoryRuns(req, res) {
       },
     });
 
-    return res.json(runs);
+    const runIds = runs.map((run) => run.id);
+
+    const scores = runIds.length
+      ? await Score.findAll({
+          where: {
+            run_id: runIds,
+          },
+          attributes: ["run_id"],
+          raw: true,
+        })
+      : [];
+
+    const scoresByRun = {};
+
+    scores.forEach((score) => {
+      scoresByRun[score.run_id] = (scoresByRun[score.run_id] || 0) + 1;
+    });
+
+    const assignedJudgesCount = category.judges.length;
+
+    const runsWithScoreProgress = runs.map((run) => ({
+      ...run.toJSON(),
+      assigned_judges_count: assignedJudgesCount,
+      scored_judges_count: scoresByRun[run.id] || 0,
+    }));
+
+    return res.json(runsWithScoreProgress);
   } catch (error) {
     console.error(error);
+
     return res.status(500).json({
       message: "Error fetching category runs",
     });
@@ -277,12 +269,12 @@ async function getRunResults(req, res) {
       };
     });
 
-    const finalScore = judgeResults.reduce((sum, r) => sum + r.total, 0);
+    const { finalScore } = calculateRunResult(scores);
 
     return res.json({
       run_id: id,
       judges: judgeResults,
-      final_score: finalScore,
+      final_score: Number(finalScore.toFixed(2)),
     });
   } catch (error) {
     console.error(error);
@@ -295,50 +287,111 @@ async function getRunResults(req, res) {
 
 //PATCH runs/:id/start
 async function startRun(req, res) {
-  const { id } = req.params;
+  try {
+    const { id } = req.params;
 
-  const activeRun = await Run.findOne({
-    where: { status: "active" },
-  });
+    const run = await Run.findByPk(id, {
+      include: {
+        model: Competitor,
+        as: "competitor",
+        include: {
+          model: Category,
+          as: "category",
+          attributes: ["id", "competition_id"],
+        },
+      },
+    });
 
-  if (activeRun) {
-    return res.status(400).json({
-      message: "There is already an active run",
+    if (!run) {
+      return res.status(404).json({
+        message: "Run not found",
+      });
+    }
+
+    if (run.status === "active") {
+      return res.status(400).json({
+        message: "Run is already active",
+      });
+    }
+
+    if (run.status === "completed") {
+      return res.status(400).json({
+        message: "Run is already completed",
+      });
+    }
+
+    const competitionId = run.competitor.category.competition_id;
+
+    const activeRun = await Run.findOne({
+      where: {
+        status: "active",
+      },
+      include: {
+        model: Competitor,
+        as: "competitor",
+        required: true,
+        include: {
+          model: Category,
+          as: "category",
+          required: true,
+          where: {
+            competition_id: competitionId,
+          },
+        },
+      },
+    });
+
+    if (activeRun) {
+      return res.status(400).json({
+        message: "There is already an active run in this competition",
+      });
+    }
+
+    await run.update({
+      status: "active",
+    });
+
+    return res.json(run);
+  } catch (error) {
+    console.error(error);
+
+    return res.status(500).json({
+      message: "Error starting run",
     });
   }
-
-  const run = await Run.findByPk(id);
-
-  if (!run) {
-    return res.status(404).json({
-      message: "Run not found",
-    });
-  }
-
-  await run.update({
-    status: "active",
-  });
-
-  return res.json(run);
 }
 
-// PATCH runs/complete
+// PATCH runs/:id/complete
 async function completeRun(req, res) {
-  const run = await Run.findOne({
-    where: { status: "active" },
-  });
+  try {
+    const { id } = req.params;
 
-  if (!run) {
-    return res.status(400).json({
-      message: "There is no active run",
+    const run = await Run.findByPk(id);
+
+    if (!run) {
+      return res.status(404).json({
+        message: "Run not found",
+      });
+    }
+
+    if (run.status !== "active") {
+      return res.status(400).json({
+        message: "Run is not active",
+      });
+    }
+
+    await run.update({
+      status: "completed",
+    });
+
+    return res.json(run);
+  } catch (error) {
+    console.error(error);
+
+    return res.status(500).json({
+      message: "Error completing run",
     });
   }
-
-  await run.update({
-    status: "completed",
-  });
-
-  return res.json(run);
 }
 
 // GET /runs/active
@@ -371,14 +424,16 @@ async function getActiveRun(req, res) {
         {
           model: Competitor,
           as: "competitor",
+          required: true,
           attributes: ["id", "firstname", "lastname"],
           include: [
             {
               model: Category,
               as: "category",
+              required: true,
               attributes: ["id", "name"],
               where: {
-                id: allowedCategoryIds, // filter - only looking for an active run if it`s category is one of the allowed for the judge
+                id: allowedCategoryIds,
               },
             },
           ],
@@ -438,9 +493,6 @@ async function getActiveRun(req, res) {
 module.exports = {
   index,
   show,
-  store,
-  update,
-  destroy,
   getCompetitorRuns,
   getCategoryRuns,
   getScoreSheet,

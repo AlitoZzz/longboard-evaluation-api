@@ -37,6 +37,17 @@ JudgeCategory.initModel(sequelize);
  * Luego de definir los modelos, se pueden establecer relaciones entre los
  * mismos (usando métodos como belongsTo, hasMany y belongsToMany)...
  */
+
+User.hasMany(Competition, {
+  foreignKey: "admin_id",
+  as: "competitions",
+});
+
+Competition.belongsTo(User, {
+  foreignKey: "admin_id",
+  as: "admin",
+});
+
 Competition.hasMany(Category, {
   foreignKey: "competition_id",
   as: "categories",

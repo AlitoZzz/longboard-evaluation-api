@@ -13,6 +13,7 @@ async function index(req, res) {
     return res.json(criteria);
   } catch (error) {
     console.error(error);
+
     return res.status(500).json({
       message: "Error fetching criteria",
     });
@@ -40,6 +41,7 @@ async function show(req, res) {
     return res.json(criterion);
   } catch (error) {
     console.error(error);
+
     return res.status(500).json({
       message: "Error fetching criterion",
     });
@@ -52,13 +54,27 @@ async function store(req, res) {
     const { name, max_score, category_id } = req.body;
 
     const category = await Category.findByPk(category_id);
+
     if (!category) {
       return res.status(404).json({
         message: "Category not found",
       });
     }
 
+    if (category.status === "active") {
+      return res.status(400).json({
+        message: "Cannot create a criterion in an active category",
+      });
+    }
+
+    if (category.status === "completed") {
+      return res.status(400).json({
+        message: "Cannot create a criterion in a completed category",
+      });
+    }
+
     let maxScore;
+
     !max_score ? (maxScore = category.default_criterion_max_score) : (maxScore = max_score);
 
     const criterion = await Criterion.create({
@@ -70,6 +86,13 @@ async function store(req, res) {
     return res.status(201).json(criterion);
   } catch (error) {
     console.error(error);
+
+    if (error.name === "SequelizeValidationError") {
+      return res.status(400).json({
+        message: "Invalid criterion data",
+      });
+    }
+
     return res.status(500).json({
       message: "Error creating criterion",
     });
@@ -80,8 +103,14 @@ async function store(req, res) {
 async function update(req, res) {
   try {
     const { id } = req.params;
+    const { name, max_score } = req.body;
 
-    const criterion = await Criterion.findByPk(id);
+    const criterion = await Criterion.findByPk(id, {
+      include: {
+        model: Category,
+        as: "category",
+      },
+    });
 
     if (!criterion) {
       return res.status(404).json({
@@ -89,11 +118,33 @@ async function update(req, res) {
       });
     }
 
-    await criterion.update(req.body);
+    if (criterion.category.status === "active") {
+      return res.status(400).json({
+        message: "Cannot update a criterion in an active category",
+      });
+    }
+
+    if (criterion.category.status === "completed") {
+      return res.status(400).json({
+        message: "Cannot update a criterion in a completed category",
+      });
+    }
+
+    await criterion.update({
+      name,
+      max_score,
+    });
 
     return res.json(criterion);
   } catch (error) {
     console.error(error);
+
+    if (error.name === "SequelizeValidationError") {
+      return res.status(400).json({
+        message: "Invalid criterion data",
+      });
+    }
+
     return res.status(500).json({
       message: "Error updating criterion",
     });
@@ -105,11 +156,28 @@ async function destroy(req, res) {
   try {
     const { id } = req.params;
 
-    const criterion = await Criterion.findByPk(id);
+    const criterion = await Criterion.findByPk(id, {
+      include: {
+        model: Category,
+        as: "category",
+      },
+    });
 
     if (!criterion) {
       return res.status(404).json({
         message: "Criterion not found",
+      });
+    }
+
+    if (criterion.category.status === "active") {
+      return res.status(400).json({
+        message: "Cannot delete a criterion from an active category",
+      });
+    }
+
+    if (criterion.category.status === "completed") {
+      return res.status(400).json({
+        message: "Cannot delete a criterion from a completed category",
       });
     }
 
@@ -120,6 +188,7 @@ async function destroy(req, res) {
     });
   } catch (error) {
     console.error(error);
+
     return res.status(500).json({
       message: "Error deleting criterion",
     });
@@ -137,6 +206,7 @@ async function getCategoryCriteria(req, res) {
     return res.json(criteria);
   } catch (error) {
     console.error(error);
+
     return res.status(500).json({
       message: "Error fetching category criteria",
     });
